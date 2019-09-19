@@ -33,7 +33,7 @@ if __name__=='__main__':
     timer = core.Clock()
     outDF = pd.DataFrame()
     csvName = 'test114.csv'
-    for fileName in tqdm(['0','1','2','3','4','5','6','7']):
+    for fileName in tqdm(fileList):
         data = pickle.load(open(f"pickles/{fileName}",'rb'))
         numb = range(len(data))
         mpFunc(numb)
