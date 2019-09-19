@@ -1,0 +1,323 @@
+---
+title: "Supplementary Material For LMEM of Diary Data"
+author: "Sungjoon Park"
+date: "26 April, 2019"
+output: pdf_document
+indent: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+This document is a supplement to the main text and provides the steps taken to construct the models and figures it contains.
+
+## Importing Libraries
+```{r, warning=FALSE,message=FALSE}
+library(data.table)
+library(tidyverse)
+library(lme4)
+library(lmerTest)
+library(ggplot2)
+library(sjPlot)
+library(sjstats)
+library(qdap)
+library(tm)
+library(jtools)
+library(optimx)
+```
+
+## Importing and cleaning Data
+
+
+```{r import/clean}
+# Assigning a varible to contain the diary
+wisData <- fread("data/Diary.demo.csv")
+
+#   Using the mutate() function to create new variables
+wisData <- wisData %>%
+    # First construct two variables that code for either positive or
+    # negative recall events
+  mutate(negSocEvent = case_when(experienceEventW1_2_1 == 1 |
+                                   experienceEventW1_2_4 == 1 |
+                                   experienceEventW1_2_5 == 1 ~ 1,
+                                 TRUE ~ 0),
+         posSocEvent = case_when(experienceEventW1_2_2 == 1 |
+                                   experienceEventW1_2_3 == 1 ~ 1,
+                                 TRUE ~ 0),
+    # Next we create a new variable that codes the above and
+    # includes those who experienced both types
+         recallEventType = case_when(negSocEvent == 1 & posSocEvent == 1 ~ 0,
+                                   posSocEvent == 1 ~ .5,
+                                   negSocEvent == 1 ~ -.5),
+    # Contrast coding the perspective condition
+         conditionC = case_when(Condition == 1 ~ -0.5,
+                                Condition == 3 ~ 0.5))
+
+# reversing the happiness variable to ascend with happiness
+wisData <- wisData %>%
+  mutate(feelRightNowWk1_2_4rev = case_when(feelRightNowWk1_2_4 == 1 ~ 6,
+                                            feelRightNowWk1_2_4 == 2 ~ 5,
+                                            feelRightNowWk1_2_4 == 3 ~ 4,
+                                            feelRightNowWk1_2_4 == 4 ~ 3,
+                                            feelRightNowWk1_2_4 == 5 ~ 2,
+                                            feelRightNowWk1_2_4 == 6 ~ 1,
+                                            feelRightNowWk1_2_4 == 7 ~ 0))
+
+# Group-mean centering the happiness variable as we are interested
+# in the level-1 effect
+wisData <- wisData %>%
+  group_by(subjectNumber) %>%
+  mutate(feelHappyC = feelRightNowWk1_2_4rev -
+           mean(feelRightNowWk1_2_4rev, na.rm = TRUE))
+
+# Setting the day data to start from zero
+wisData$zeroDay <- wisData$Day_correct - 1
+```
+
+## Cleaning diary entry text and extracting polarity
+
+```{r semantic analysis}
+# Converting diary entry text data into utf-8 format
+# This must be done for the qdap::polarity() function to read.
+wisData$cleanText <- enc2utf8(wisData$Event.clean)
+
+# Removing punctuations using the tm package.
+# The qdap::polarity() function does not handle punctuations.
+wisData$cleanText <- tm::removePunctuation(wisData$cleanText)
+
+# Computing text polarity
+wisData$polarity <- qdap::polarity(wisData$cleanText)$all$polarity
+    # the "$all$polarity" code at the end is vital as we only wish to
+    # gain the polarity value and not the other outputs.
+
+# Summary output of polarity
+summary(wisData$polarity)
+```
+
+## Constructing a null model
+
+The null model only involved our dependent variable of interest (polarity) and our random effect (subjects). We can also calculate the model's ICC.
+
+```{r null model}
+mod1 <- lme4::lmer(polarity ~ 1 + (1|subjectNumber), data = wisData)
+summary(mod1)
+
+# Computing ICC
+input = as.data.frame(summary(mod1)$varcor)
+icc = input$vcov[1] / sum(input$vcov)
+icc
+```
+
+The ICC value is the proportion of the variance in polarity that can be explained by individual differences. 
+
+## Constructing more models
+
+```{r more models 1}
+# Addiing the day variable as a fixed effect (fixed slope model)
+mod2 <- lmer(polarity ~ zeroDay + (1|subjectNumber), data=wisData)
+
+# A model with day variable to differ between days (random slope model)
+mod3 <- lmer(polarity ~ zeroDay + (zeroDay|subjectNumber), data=wisData)
+
+# comparing the two models
+anova(mod2, mod3)
+```
+
+As there is no significant difference between the two models I opted for the fixed slope model as it makes little sense to have a random slope for the day variable.
+
+```{r more models 2}
+# Although I have changed the way I write the lmer function, it is 
+# identical to previous one. This is for me to see my function virtically
+# instead of taking horizontal space
+
+# Model with the perspective condition added  as a fixed effect
+mod4 <- lmer(polarity ~
+               zeroDay +
+               conditionC+
+               (1|subjectNumber),
+             data=wisData)
+
+# Model with all fixed effect variables of interest added
+mod5 <- lmer(polarity ~
+               zeroDay +
+               conditionC+
+               recallEventType +
+               feelHappyC +
+               (1|subjectNumber),
+             data=wisData)
+
+# model with both happiness and recall event type variables
+# added to vary across days (random-slope model)
+mod6a <- lmer(polarity ~
+               zeroDay +
+               conditionC+
+               recallEventType +
+               feelHappyC +
+               (feelHappyC+recallEventType|subjectNumber),
+             data=wisData)
+
+# the above model causes a warning that it failed to converge
+# This can be resolved by making the lmer function try a different
+# optimizer. The package "optimx" was required to do this.
+mod6b <- lmer(polarity ~
+               zeroDay +
+               conditionC+
+               recallEventType +
+               feelHappyC +
+               (feelHappyC+recallEventType|subjectNumber),
+             data=wisData,
+             control = lmerControl(optimizer = 'optimx', optCtrl=list(method='L-BFGS-B')))
+
+# Alternatively, the code:
+#    control = lmerControl(optimizer = "bobyqa",optCtrl=list(maxfun=2e5)))
+# can be run with the default lme4 package. However some of my future
+# models faced convergence warnings with it.
+# When one optimized doesn't work it may be worth trying others.
+# the optCtrl=list(method= ) portion of the code can specify the optimizer (eg.'bobyqa')
+
+# Comparing the fixed-slope and random-slope models
+anova(mod5,mod6b)
+```
+
+## Dealing with singular fit warning
+
+```{r singular fit}
+# This model attempts to model the interaction between happiness and
+# event recall type. However this model faces a singular fit warning
+mod7a <- lmer(polarity ~
+               zeroDay +
+               conditionC+
+               recallEventType *
+               feelHappyC +
+               (feelHappyC*recallEventType|subjectNumber),
+             data=wisData,
+             control = lmerControl(optimizer = 'optimx', optCtrl=list(method='bobyqa')))
+
+# As a result I simplified the model to only interact as fixed effect
+# and not with as random slopes. 
+mod7b <- lmer(polarity ~
+               zeroDay +
+               conditionC+
+               recallEventType *
+               feelHappyC +
+               (feelHappyC+recallEventType|subjectNumber),
+             data=wisData,
+             control = lmerControl(optimizer = 'optimx', optCtrl=list(method='bobyqa')))
+
+# Comparing the two models reveal they are not significantly different
+# I chose the model that does not face the singular fit warning
+anova(mod7a,mod7b)
+
+# Display summary of the full model
+summary(mod7b)
+```
+
+## Modeling interactions with factors
+
+The next model attempts to model the recall event type as factors. I did this because I was worried that my assumption that event types will has a nice step-wise relation where recalling only negative event is significantly worse than recalling both positive and negative events.
+
+```{r factors}
+mod8 <- lmer(polarity ~
+               zeroDay +
+               conditionC+
+               as.factor(recallEventType) *
+               feelHappyC +
+               (feelHappyC+as.factor(recallEventType)|subjectNumber),
+             data=wisData,
+             control = lmerControl(optimizer = 'optimx', optCtrl=list(method='L-BFGS-B')))
+
+# Comparing the two models
+anova(mod7b, mod8)
+```
+
+The comparison demonstrates that modeling event recall type as factor results in a significantly different and better model (indicated by its smaller AIC).
+
+## Simplifying the model
+
+Since the full model does not indicate that perspective condition or days are significant variables. I decided to remove them from this model to simplify it. 
+
+```{r simplify}
+mod9 <- lmer(polarity ~
+               as.factor(recallEventType) *
+               feelHappyC +
+               (feelHappyC+as.factor(recallEventType)|subjectNumber),
+             data=wisData,
+             control = lmerControl(optimizer = 'optimx', optCtrl=list(method='L-BFGS-B')))
+
+# Comparing simple model with the full model
+anova(mod8,mod9)
+```
+
+The comparison shows that the simple model is not significantly different from the more complicated full model. In addition, it boasts a marginally smaller AIC and BIC, but it does lose two units of degrees of freedom. 
+
+## Visualization of model
+
+These codes are those used to create the figures on the main text.
+
+#### Figure 1.
+
+This code plots the interaction between the two fixed effects
+```{r f1}
+sjPlot::plot_model(mod7b, "int")
+```
+
+#### Figure 2.
+
+This code plots the bar graph with the perspective condition side by side with the recall event type as the x-axis and polarity as the y-axis and plots a linear regression line for the perspective conditions.
+
+```{r f2}
+# This data.table, square bracket, syntax includes rows where the recall event not is NA
+wisData[!is.na(wisData$recallEventType),] %>%
+  ggplot(aes(y=polarity, x=as.factor(recallEventType),color=as.factor(conditionC)))+
+  geom_boxplot()+
+      # se=FALSE command removes the standard error shading
+  geom_smooth(aes(group=as.factor(conditionC)), method = "lm",se=FALSE)+
+      # pos = "top" command places the color legend above the plot
+  legend_style(pos = "top")+
+      # command below changes the label of the color legend
+  labs(color="Perspective Condition")+
+      # command below changes the label of the x-axis factors
+  scale_x_discrete(labels=c("Negative","Mixed","Positive"))+
+      # commands below re-names the axis labels
+  xlab("Recall Event Type")+
+  ylab("Polarity")
+```
+
+#### Figure 3
+
+This code plots a scatter plot with happiness as the x-axis, polarity as the y-axis. It also divides horizontally so the top row represents the immersed condition and the bottom row represents the distanced condition. And it is divided vertically so that each column represents the respective recall type.
+```{r f3}
+# This data.table, square bracket, syntax include rows where the recall event is not NA
+wisData[!is.na(wisData$recallEventType),] %>%
+  ggplot(aes(y=polarity, x=feelHappyC, color = as.factor(recallEventType)))+
+  geom_point(size= 0.5)+
+      # fullrange=TRUE command extends the regression line
+  geom_smooth(aes(group=as.factor(recallEventType)),method = "lm",se=FALSE,fullrange=TRUE)+
+      # adding a dashed line representing the mean polarity
+  geom_hline(yintercept=summary(wisData$polarity)[[4]],linetype = "dashed") +
+      # splitting the plot by perspective and recall event type
+  facet_grid(conditionC~recallEventType)+
+  legend_style(pos = "top")+
+  labs(color="Recall Event Type")+
+  scale_color_discrete(labels=c("Negative","Mixed","Positive"))+
+  xlab("Happiness")+
+  ylab("Polarity")
+```
+
+## Useful packages and functions
+
+Here I will demonstrate some of the useful packages and functions I used to extract information from the models.
+
+```{r useful func}
+# This function displays a well formatted summary of a model
+# I used it to extract information about the random effects, group variables,
+# and model fit. (Of concern is the discrepancy of the AIC and BIC in this output
+# and others)
+jtools::summ(mod9)
+
+# This function displays the standardized beta estimate, errors and confidence intervals
+sjstats::std_beta(mod9)
+```
