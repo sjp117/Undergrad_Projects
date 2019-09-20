@@ -6,21 +6,26 @@
 # =============================================================================
 """
 This is my protocol script for my research project "Mental Model Updating and
-Pupil Response". 
+Pupil Response".
 """
 # =============================================================================
 
-from psychopy import visual, core, event, gui, sound
-from time import sleep
-from threading import Thread
-from copy import deepcopy
-from os import mkdir
+import numpy as np
 import random
 import pandas as pd
 import LiveTrack as lt
 import pickle
 import calibrate
 import os
+import psychtoolbox as ptb
+from psychopy import visual, core, event, gui, prefs
+prefs.hardware['audioLib'] = ['PTB']
+from psychopy import sound
+from time import sleep
+from threading import Thread
+from copy import deepcopy
+from os import mkdir
+
 
 # variables
 # set window parameter
@@ -38,18 +43,20 @@ win0 = visual.Window(size=(600, 600),
 fixStim = visual.Circle(win=win0, radius=0.4, edges=32, fillColor='white')
 
 # shape/color stimuli
+sqSize = 10
+cirSize = 5
 stimLineW = 2
 blueVal = [0, 0, 1]
 greenVal = [0, 0.5, 0]
 stim_BluSqr = visual.Rect(win=win0,
-                          size=12,
+                          size=sqSize,
                           fillColor=blueVal,
                           lineColor=(-1, -1, -1),
                           lineWidth=stimLineW
                           )
 
 stim_BluCir = visual.Circle(win=win0,
-                            size=6,
+                            size=cirSize,
                             fillColor=blueVal,
                             lineColor=(-1, -1, -1),
                             edges=99,
@@ -57,14 +64,14 @@ stim_BluCir = visual.Circle(win=win0,
                             )
 
 stim_GreSqr = visual.Rect(win=win0,
-                          size=12,
+                          size=sqSize,
                           fillColor=greenVal,
                           lineColor=(-1, -1, -1),
                           lineWidth=stimLineW
                           )
 
 stim_GreCir = visual.Circle(win=win0,
-                            size=6,
+                            size=cirSize,
                             fillColor=greenVal,
                             lineColor=(-1, -1, -1),
                             edges=99,
@@ -132,7 +139,7 @@ noResp = visual.TextStim(win=win0,
 doIntro = True
 doPractice = True
 doExp = True
-doSaveData = True
+doSave = True
 
 # points screen
 pointsScreen = visual.TextStim(win=win0, text="= 0")
@@ -146,16 +153,16 @@ dictInfo = {'version': 0, 'partID': "", 'gender': "m/f", 'age': "",
             'session#': "", 'debug': "", 'blueEyes': "y/n"}
 
 trialDataKeys = ['trialTotal', 'blockTrial', 'block', 'contingentCond',
-                 'probCond','respSuccess', 'stimDisplayed', 'correctAnswer',
+                 'probCond', 'respSuccess', 'stimDisplayed', 'correctAnswer',
                  'choice', 'isCorrect', 'isForcedError', 'surpriseType',
                  'confRating', 'pointsStartTime', 'pointsEndTime', 'stimStartTime',
                  'stimEndTime', 'respStartTime', 'respEndTime', 'fixStartTime',
                  'fixEndTime', 'feedbackStartTime', 'feedbackEndTime', 'noRespStartTime',
                  'noRespEndTime', 'choiceHist', 'ratingHist', 'points']
 
-
 trialDataDict = dict.fromkeys(trialDataKeys)
 trialDataDict['points'] = 0
+trialDataDict['trialTotal'] = -1
 
 participantNumber = 123  # participand number code (dummy for now)
 trialNumbTotal = 0
@@ -174,30 +181,32 @@ introText1 = """
     On your journey, you will come across a sign that will guide you to where the gold is.\n
     The sign will be one of two shapes with one of two colors.\n
     One type of color and shape will signal up and the other color and shape will signal down.\n
+    Press [space] to continue"""
+introText2 = """
     On any series of trials, either the shape or the color will reliably guide you to the treasure.\n
     There will be no occasions where both shapes and colors are reliable guides at the same time.\n
     Choose wisely on whether you will trust the shape or the color.\n
-    And be on your toes, as the reliable guide might change.\n
+    And be on your toes, as the reliable guide will change.\n
     Press [space] to continue"""
-introText2 = """
+introText3 = """
     When the shape is the reliable guide, 'SQUARE' will signal 'UP' and 'CIRCLE' will signal 'DOWN'.\n
     When the color is the reliable guide, 'GREEN' will signal 'UP' and 'BLUE' will signal 'DOWN'.\n
     Note that the guide will not always be correct.\n
     There will always be a small chance for the correct guide to be mistaken.\n
     Press [space] to continue"""
-introText2v2 = """
+introText3v2 = """
     When the shape is the reliable guide, 'CIRCLE' will signal 'UP' and 'SQUARE' will signal 'DOWN'.\n
     When the color is the reliable guide, 'BLUE' will signal 'UP' and 'GREEN' will signal 'DOWN'.\n
     Note that the guide will not always be correct.\n
     There will always be a chance for the correct guide to be mistaken.\n
     Press [space] to continue"""
-introText3 = """
+introText4 = """
     After seeing the sign, you will make your decision to go 'UP' or 'DOWN' by pressing a button.\n
     And you will need to indicate how confident you feel that either the shape or the color is the reliable guide.\n
     You will indicate your confidence by clicking on a slider that says 'SHAPE' and 'COLOR' on either ends.\n
     Click closer to the ends, if you feel more confident.\n
     Press [space] to continue"""
-introText4 = """
+introText5 = """
     After making your responses, you will be given a feedback on whether you made the correct choice.\n
     If you made the correct choice, you will hear a 'HIGH' tone sound.\n
     If you made the wrong choice, you will hear a 'LOW' tone sound.\n
@@ -205,7 +214,7 @@ introText4 = """
     This will be the end of a trial and and you will repeat this process.\n\n
     If you wish to read the instructions again, press [r]\n
     Press [Space] to move on."""
-introText4v2 = """
+introText5v2 = """
     After making your responses, you will be given a feedback on whether you made the correct choice.\n
     If you made the correct choice, you will hear a 'LOW' tone sound.\n
     If you made the wrong choice, you will hear a 'HIGH' tone sound.\n
@@ -220,18 +229,18 @@ practiceText1 = """
     press [c] to start calibration."""
 practiceText2 = """
     For the practice trials, the goal is for you to become familiar with your task.\n
-    The first trials will have no time limit. However, the rest of the trials will have a time limit.\n
-    In the first trial the color will be the reliable guide. 'GREEN' means 'UP', 'BLUE' means 'DOWN'\n
-    In the second trial the shape will be the reliable guide. 'SQUARE' means 'UP', 'CIRCLE' means 'DOWN'\n
+    The first set of trials will have no time limit. However, the rest of the trials will have a time limit.\n
+    For the first four trials the color will be the reliable guide. 'GREEN' means 'UP', 'BLUE' means 'DOWN'\n
+    For the latter four trials the shape will be the reliable guide. 'SQUARE' means 'UP', 'CIRCLE' means 'DOWN'\n
     To start the practice trials, press [space]"""
 practiceText2v2 = """
     For the practice trials, the goal is for you to become familiar with your task.\n
-    The first trials will have no time limit. However, the rest of the trials will have a time limit.\n
-	In the first trial the color will be the reliable guide. 'BLUE' means 'UP', 'GREEN' means 'DOWN'\n
-    In the second trial the shape will be the reliable guide. 'CIRCLE' means 'UP', 'SQUARE' means 'DOWN'\n
+    The first set of trials will have no time limit. However, the rest of the trials will have a time limit.\n
+	For the first four trials the color will be the reliable guide. 'BLUE' means 'UP', 'GREEN' means 'DOWN'\n
+    For the latter four trials the shape will be the reliable guide. 'CIRCLE' means 'UP', 'SQUARE' means 'DOWN'\n
     To start the practice trials, press [space]"""
 practiceText3 = """
-    You have finished the untimed practice trial\n
+    You have finished the untimed practice trials\n
     If you wish to repeat it, press [r]\n
     If you wish to move on to the timed practice trials, press [space]"""
 practiceText4 = """
@@ -245,13 +254,18 @@ expText1 = """
     Press [c] to calibrate."""
 expText2 = """
     You are about to proceed to the experimental trials.\n
-    If you have any question for researcher, please ask now.\n
+    If you have any question for the researcher, please ask now.\n
     If you are ready to proceed, press [space]"""
 
 breakText = """
     BREAK!\n
     You may take your head off the chin-rest and relax.\n
     Simply inform the investigator when you are ready to continue."""
+
+calibStartText = """
+    For calibration, please stare at the dots that appear on the screen.\n
+    Please do not move your eyes to a different part of the screen until the next dot appears.
+    Press [Space] to start."""
 
 calibEndText = """
     Calibration finished.\n
@@ -267,17 +281,25 @@ def shutDown():
     win0.close()
     core.quit()
 
+
 def doCalibrate():
+    visual.TextStim(win=win0, text=f"{calibStartText}", height=0.9).draw()
+    win0.flip()
+    keys = event.waitKeys(keyList=['space'])
+    win0.flip()
     calibrate.main()
     visual.TextStim(win=win0, text=f"{calibEndText}", height=0.9).draw()
     win0.flip()
     keys = event.waitKeys(keyList=['space'])
+    win0.flip()
 
-# Helper Functions
+
 def getdict(struct):
-    # this function returns a dictionary of the cython data structure (eye tracker data)
+    # this function returns a dictionary of the cython data structure (eye data)
     return dict((field, getattr(struct, field)) for field, _ in struct._fields_)
 
+
+# Helper Functions
 def randIntNoRepeat(numb, min, max):
     """Function to create a list of integers that do not repeat subsequently.
     This is being used to create a list of which stimulus to present.
@@ -297,6 +319,7 @@ def randIntNoRepeat(numb, min, max):
                     outList.append(pick)
                     break
     return outList
+
 
 def randIntListSetTotal(nVal=1, meanVal=0, minVal=0, maxVal=0, reapVal=0):
     """Returns a list of random integers This funciton generates a list of random
@@ -358,7 +381,7 @@ def makeProbabilityConditionList(input):
             if (i % 2) == 0:  # determine if element position is even (if divisible by 2)
                             # 0 is considered even
                 # set prob to a random integer (0 or 1)
-                prob = random.randint(0,1)
+                prob = random.randint(0, 1)
                 outputList.append(prob)  # append list with new prob value
             elif (i % 2) == 1:    # if element position is odd
                 # append list with the same prob value as before
@@ -373,7 +396,7 @@ def debugging():
     global doIntro
     global doPractice
     global doExp
-    global doSaveData
+    global doSave
     if dictInfo['debug'] == "1":      # skip introduction
         doIntro = False
     elif dictInfo['debug'] == "2":    # skip practice
@@ -384,7 +407,7 @@ def debugging():
     elif dictInfo['debug'] == "4":    # only experimental trials, no save
         doIntro = False
         doPractice = False
-        doSaveData = False
+        doSave = False
     elif dictInfo['debug'] == "5":    # only intro
         doPractice = False
         doExp = False
@@ -396,32 +419,27 @@ def debugging():
         doPractice = False
         doExp = False
 
-# Introduction scenes
+
 def introduction():
-    introScreen = visual.TextStim(win=win0, text=f"{introText1}", height=0.9)
-    introScreen.draw()
+    visual.TextStim(win=win0, text=f"{introText1}", height=0.9).draw()
+    win0.flip()
+    keys = event.waitKeys(keyList=['space'])
+    visual.TextStim(win=win0, text=f"{introText2}", height=0.9).draw()
     win0.flip()
     keys = event.waitKeys(keyList=['space'])
     if dictInfo['version'] == 0:
-        introScreen = visual.TextStim(
-            win=win0, text=f"{introText2}", height=0.9)
+        visual.TextStim(win=win0, text=f"{introText3}", height=0.9).draw()
     elif dictInfo['version'] == 1:
-        introScreen = visual.TextStim(
-            win=win0, text=f"{introText2v2}", height=0.9)
-    introScreen.draw()
+        visual.TextStim(win=win0, text=f"{introText3v2}", height=0.9).draw()
     win0.flip()
     keys = event.waitKeys(keyList=['space'])
-    introScreen = visual.TextStim(win=win0, text=f"{introText3}", height=0.9)
-    introScreen.draw()
+    visual.TextStim(win=win0, text=f"{introText4}", height=0.9).draw()
     win0.flip()
     keys = event.waitKeys(keyList=['space'])
     if dictInfo['version'] == 0:
-        introScreen = visual.TextStim(
-            win=win0, text=f"{introText4}", height=0.8)
+        visual.TextStim(win=win0, text=f"{introText5}", height=0.8).draw()
     elif dictInfo['version'] == 1:
-        introScreen = visual.TextStim(
-            win=win0, text=f"{introText4v2}", height=0.8)
-    introScreen.draw()
+        visual.TextStim(win=win0, text=f"{introText5v2}", height=0.8).draw()
     win0.flip()
     keys = event.waitKeys(keyList=['space', 'r'])
     if keys[-1] == 'r':
@@ -436,7 +454,7 @@ def breakSection():
     lt.StartTracking()
 
 
-# Main protocol functions
+# Main protocol scenes
 def percentFixationScreen(duration=1):
     """Show a fixation screen with points on the center instead of a cross
     """
@@ -455,18 +473,17 @@ def percentFixationScreen(duration=1):
     trialDataDict['pointsEndTime'] = lt.GetLastResult().Timestamp
 
 
-def stimulusScreen(duration=2, pracStim=0, trialNumb=0):
+def stimulusScreen(duration=2):
     """Show a random stimulus for a duration of time(s)
     Stimulus is chosn from a list of stimuli named "stimList"
     """
     global stim
     # choose a random stimulus from the stimulus list
     if doPractice == True:
-        stim = stimList[pracStim]
+        stim = stimList[trialDataDict['blockTrial']]
     else:
-        trialDataDict['stimDisplayed'] = stimSequence[trialNumb]
-        # random integer, the length of stimulus list
-        stim = stimList[stimSequence[trialNumb]]
+        trialDataDict['stimDisplayed'] = stimSequence[trialDataDict['trialTotal']]
+        stim = stimList[trialDataDict['stimDisplayed']]
     trialDataDict['stimStartTime'] = lt.GetLastResult().Timestamp
     for frameN in range(duration * refreshRate):
         if event.getKeys(keyList=['escape']):
@@ -578,12 +595,12 @@ def noRespScreen(duration=3):
     trialDataDict['noRespEndTime'] = lt.GetLastResult().Timestamp
 
 
-def determineFeedback(blockNumb):
+def determineFeedback():
     global respSound
 
     # looks up the current contingent (color or shape)
     # if current contingent is color, set the correct answer to be based on color
-    if contingentBlockList[blockNumb] == 0:  # 0 == color
+    if trialDataDict['contingentCond'] == 0:  # 0 == color
         if stim == stim_BluSqr or stim == stim_BluCir:
             if dictInfo['version'] == 0:
                 trialDataDict['correctAnswer'] = 0  # 0 == down
@@ -596,7 +613,7 @@ def determineFeedback(blockNumb):
                 trialDataDict['correctAnswer'] = 0  # 0 == down
 
     # if current contingent is shape, set the correct answer to be based on shape
-    elif contingentBlockList[blockNumb] == 1:  # 1 == shape
+    elif trialDataDict['contingentCond'] == 1:  # 1 == shape
         if stim == stim_BluSqr or stim == stim_GreSqr:
             if dictInfo['version'] == 0:
                 trialDataDict['correctAnswer'] = 1  # 1 == up
@@ -612,7 +629,7 @@ def determineFeedback(blockNumb):
     # if participant made the correct choice
     if trialDataDict['correctAnswer'] == trialDataDict['choice']:
         # when probability condition is low (0)
-        if probabilityConditionList[blockNumb] == 0:
+        if trialDataDict['probCond'] == 0:
             # feedback is chosen with the low probability weighting
             trialDataDict['isCorrect'] = np.random.choice(
                 2, p=(1 - probConds[0], probConds[0]))
@@ -621,7 +638,7 @@ def determineFeedback(blockNumb):
             elif trialDataDict['isCorrect'] == 1:
                 trialDataDict['isForcedError'] = 0
         # when probability condition is high (1)
-        elif probabilityConditionList[blockNumb] == 1:
+        elif trialDataDict['probCond'] == 1:
             # feedback is chosen with the high probabiity weighting
             trialDataDict['isCorrect'] = np.random.choice(
                 2, p=(1 - probConds[1], probConds[1]))
@@ -651,7 +668,7 @@ def determineFeedback(blockNumb):
         respSound = soundCorrect
 
 
-def fixationScreen(duration=1,blockNumb=0):
+def fixationScreen(duration=1):
     """Show a fixation screen for a duration of time(s)
     and in the mean time, process what the feedback should be
     """
@@ -664,7 +681,7 @@ def fixationScreen(duration=1,blockNumb=0):
         if event.getKeys(keyList=['escape']):
             break
         if feedbackProcessCheck == False:
-            determineFeedback(blockNumb)
+            determineFeedback()
             feedbackProcessCheck = True
         sleep(0.0000001)   # this sleep command prevents 'busy wait',
         # consuming less cpu
@@ -673,7 +690,8 @@ def fixationScreen(duration=1,blockNumb=0):
 
 def feedbackScreen(duration=4):
     trialDataDict['feedbackStartTime'] = lt.GetLastResult().Timestamp
-    respSound.play()
+    nextFlip = win0.getFutureFlipTime(clock='ptb')
+    respSound.play(when=nextFlip)
     for frameN in range(duration * refreshRate):
         if event.getKeys(keyList=['escape']):
             break
@@ -711,16 +729,16 @@ def practiceSection():
             for trialNumb in range(blockTrialList[blockNumb]):
                 trialDataDict['blockTrial'] = trialNumb
                 trialNumbTotal += 1
-                trialDataDict['trialTotal'] = trialNumbTotal
+                trialDataDict['trialTotal'] += 1
                 trialDataDict['block'] = blockNumb
                 trialDataDict['contingentCond'] = contingentBlockList[blockNumb]
                 trialDataDict['probCond'] = probabilityConditionList[blockNumb]
                 percentFixationScreen(duration=500)
-                stimulusScreen(duration=500, pracStim=trialNumb)
+                stimulusScreen(duration=500)
                 responseScreen(duration=500)
-                fixationScreen(duration=500, blockNumb=blockNumb)
+                fixationScreen(duration=500)
                 feedbackScreen(duration=500)
-        visual.TextStim(win=win0, text=f"{practiceText3}", height=0.7).draw()
+        visual.TextStim(win=win0, text=f"{practiceText3}", height=0.9).draw()
         win0.flip()
         keys = event.waitKeys(keyList=['space', 'r'])
         if keys[-1] == 'space':
@@ -734,17 +752,16 @@ def practiceSection():
         for blockNumb in range(len(blockTrialList)):
             for trialNumb in range(blockTrialList[blockNumb]):
                 trialDataDict['blockTrial'] = trialNumb
-                trialNumbTotal += 1
-                trialDataDict['trialTotal'] = trialNumbTotal
+                trialDataDict['trialTotal'] += 1
                 trialDataDict['block'] = blockNumb
                 trialDataDict['contingentCond'] = contingentBlockList[blockNumb]
                 trialDataDict['probCond'] = probabilityConditionList[blockNumb]
                 percentFixationScreen()
-                stimulusScreen(pracStim=trialNumb)
+                stimulusScreen()
                 responseScreen()
-                fixationScreen(blockNumb=blockNumb)
-                feedbackScreen(blockNumb=blockNumb)
-        visual.TextStim(win=win0, text=f"{practiceText4}", height=0.7).draw()
+                fixationScreen()
+                feedbackScreen()
+        visual.TextStim(win=win0, text=f"{practiceText4}", height=0.9).draw()
         win0.flip()
         keys = event.waitKeys(keyList=['space', 'r'])
         if keys[-1] == 'space':
@@ -763,11 +780,11 @@ def saveTrialData():
     dataDir = f"data/{dictInfo['partID']}/pickle/{dictInfo['session#']}"
     try:
         original_umask = os.umask(0)
-        os.makedirs(dataDir,0o777)
+        os.makedirs(dataDir, 0o777)
     except OSError:
-        print ("Creation of the directory %s failed" % dataDir)
+        print("Creation of the directory %s failed" % dataDir)
     else:
-        print ("Successfully created the directory %s" % dataDir)
+        print("Successfully created the directory %s" % dataDir)
     finally:
         os.umask(original_umask)
 
@@ -801,6 +818,12 @@ def saveTrialData():
             print(f"{timer.getTime()}\tUPDATED!!")
             trialCheck = False
         sleep(0.001)
+
+
+# Global Commands
+event.globalKeys.add(key='s', modifiers=('ctrl', 'alt'), func=shutDown)
+event.globalKeys.add(key='b', modifiers=('ctrl', 'alt'), func=breakSection)
+
 
 def versionChange():
     global soundCorrect
@@ -843,17 +866,13 @@ def versionChange():
                                     lineWidth=stimLineW,
                                     pos=(0, -refPos)
                                     )
-    soundCorrect = sound.Sound(value=soundList[0], stereo=True,
-                               hamming=False, preBuffer=-1, loops=0, volume=1)
-    soundNotCorrect = sound.Sound(value=soundList[-1], stereo=True,
-                                  hamming=False, preBuffer=-1, loops=0, volume=1)
+    soundCorrect = sound.Sound(value=soundList[0], stereo=-1,
+                               hamming=True, preBuffer=-1)
+    soundNotCorrect = sound.Sound(value=soundList[-1], stereo=-1,
+                                  hamming=True, preBuffer=-1)
 
     scaleLabelLeft.text = scaleLabelList[0]
     scaleLabelRight.text = scaleLabelList[-1]
-
-# Psychopy Global Commands
-event.globalKeys.add(key='s', modifiers=('ctrl', 'alt'), func=shutDown)
-event.globalKeys.add(key='b', modifiers=('ctrl', 'alt'), func=breakSection)
 
 
 if __name__ == '__main__':
@@ -875,7 +894,6 @@ if __name__ == '__main__':
     # win0.winHandle.maximize()
     # win0.fullscr = True
     win0.flip()
-
     # Start of experiment body
     # Introduction Section
     if doIntro == True:
@@ -897,40 +915,39 @@ if __name__ == '__main__':
         # reset eye tracker buffer and dictionaries before exp trials
         trialDataDict = dict.fromkeys(trialDataKeys)
         trialDataDict['points'] = 0
-        trialNumbTotal = -1
+        trialDataDict['trialTotal'] = -1
         lt.StopTracking()
         lt.ClearDataBuffer()
         lt.SetResultsTypeCalibrated()
         lt.StartTracking()
         blockTrialNumbs = randIntListSetTotal(12, 16, 10, 22, 3)
         contingentBlockList = makeContingentBlockList(blockTrialNumbs)
-        probabilityConditionList = makeProbabilityConditionList(blockTrialNumbs)
+        probabilityConditionList = makeProbabilityConditionList(
+            blockTrialNumbs)
         stimSequence = randIntNoRepeat(sum(blockTrialNumbs), 0, 3)
-        if doSaveData == True:
+        if doSave == True:
             saveTrialThread = Thread(target=saveTrialData)
             saveTrialThread.start()
-	win0.mouseVisible = False
         totalTimer = core.Clock()
         timer = core.Clock()
-	# Start of the experimental trials
         for blockNumb in range(len(blockTrialNumbs)):
             if blockNumb == len(blockTrialNumbs) / 2:
                 breakSection()
             for trialNumb in range(blockTrialNumbs[blockNumb]):
                 while True:
                     trialDataDict['blockTrial'] = trialNumb
-                    trialNumbTotal += 1
-                    trialDataDict['trialTotal'] = trialNumbTotal
+                    trialDataDict['trialTotal'] += 1
                     trialDataDict['block'] = blockNumb
                     trialDataDict['contingentCond'] = contingentBlockList[blockNumb]
                     trialDataDict['probCond'] = probabilityConditionList[blockNumb]
                     timer.reset()
+                    win0.mouseVisible = False
                     print(
                         f"trial#: {trialNumbTotal}\tprob: {probabilityConditionList[blockNumb]}\tcont: {contingentBlockList[blockNumb]}")
                     percentFixationScreen()
                     print(f"{timer.getTime()}\tpoints")
                     timer.reset()
-                    stimulusScreen(trialNumb=trialNumbTotal)
+                    stimulusScreen()
                     print(f"{timer.getTime()}\tstim")
                     timer.reset()
                     win0.mouseVisible = True
@@ -956,22 +973,22 @@ if __name__ == '__main__':
         print(f"total time elapsed:\t{totalTime}")
         if trialDataDict['points'] != 0:
             pointsPercent = round(
-                ((trialDataDict['points'] / ((trialNumbTotal + 1) * 10)) * 100) + 0.5)
+                ((trialDataDict['points'] / ((trialDataDict['trialTotal'] + 1) * 10)) * 100) + 0.5)
             visual.TextStim(win=win0, text=f"""You have finished the session!\n
-                        You have earned {trialDataDict['points']} gold out of 2160!\n
+                        You have earned {trialDataDict['points']} gold out of {(trialDataDict['trialTotal'] + 1)*10}!\n
                         That is {pointsPercent}%!\n
                         Thank you for your participation.\n\nSaving...""", height=0.9).draw()
             win0.flip()
             sleep(3)
             backupCheck = False
-            if doSaveData == True:
+            if doSave == True:
                 saveTrialThread.join()
 
             visual.TextStim(win=win0, text=f""""You have finished the session!\n
-                            You have earned {trialDataDict['points']} gold out of 2160!\n
-                            That is {pointsPercent}%!\n
-                            Thank you for your participation.\n\nSaving done!\n
-                            Press [space] to end.""", height=0.9).draw()
+                        You have earned {trialDataDict['points']} gold out of {(trialDataDict['trialTotal'] + 1)*10}!\n
+                        That is {pointsPercent}%!\n
+                        Thank you for your participation.\n\nSaving done!\n
+                        Press [Space] to end.""", height=0.9).draw()
             win0.flip()
     event.waitKeys(keyList=('space'))
     lt.StopTracking()
