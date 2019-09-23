@@ -16,7 +16,6 @@ import pandas as pd
 import LiveTrack as lt
 import pickle
 import calibrate
-import os
 import psychtoolbox as ptb
 from psychopy import visual, core, event, gui, prefs
 prefs.hardware['audioLib'] = ['PTB']
@@ -24,8 +23,9 @@ from psychopy import sound
 from time import sleep
 from threading import Thread
 from copy import deepcopy
-from os import mkdir
+from os import makedirs, umask
 
+print(sound.Sound)
 
 # variables
 # set window parameter
@@ -802,7 +802,7 @@ def saveTrialData():
             outDF['contactLens'] = dictInfo['contactLens']
 
             # saving the dataframe as a CSV
-            if outDF['trialTotal'][0] == 0:
+            if trialDataDictCopy['trialTotal'] == 0:
                 outDF.to_csv(f"data/{dictInfo['partID']}/{dictInfo['partID']}_{dictInfo['session#']}data.csv",
                              index=False, header=True)
             else:
@@ -943,7 +943,7 @@ if __name__ == '__main__':
                     timer.reset()
                     win0.mouseVisible = False
                     print(
-                        f"trial#: {trialNumbTotal}\tprob: {probabilityConditionList[blockNumb]}\tcont: {contingentBlockList[blockNumb]}")
+                        f"trial#: {trialDataDict['trialTotal']}\tprob: {trialDataDict['probCond']}\tcont: {trialDataDict['contingentCond']}")
                     percentFixationScreen()
                     print(f"{timer.getTime()}\tpoints")
                     timer.reset()
