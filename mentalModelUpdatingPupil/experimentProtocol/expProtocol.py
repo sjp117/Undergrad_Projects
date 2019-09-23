@@ -876,8 +876,6 @@ def versionChange():
 
 
 if __name__ == '__main__':
-    # win0.fullscr = False
-    # win0.winHandle.minimize()
     expName = 'mentalModelPupil'
     dlg = gui.DlgFromDict(dictionary=dictInfo,
                           title=expName,
@@ -885,16 +883,14 @@ if __name__ == '__main__':
                           order=['partID', 'version', 'session#', 'gender',
                                  'age', 'mascara', 'glasses', 'contactLens',
                                  'blueEyes', 'debug'])
-    if dlg.OK == False:
-        win0.close(), core.quit()    # user pressed cancel
+    if dlg.OK == False:	# if user pressed cancel
+        win0.close()
+	core.quit()    
     debugging()
     versionChange()
     lt.Init()   # initialize LiveTrack (Eye tracker)
     lt.StartTracking()  # LiveTrack start tracking
-    # win0.winHandle.maximize()
-    # win0.fullscr = True
     win0.flip()
-    # Start of experiment body
     # Introduction Section
     if doIntro == True:
         introduction()
@@ -912,6 +908,7 @@ if __name__ == '__main__':
         win0.flip()
         keys = event.waitKeys(keyList=['space'])
         win0.flip()
+
         # reset eye tracker buffer and dictionaries before exp trials
         trialDataDict = dict.fromkeys(trialDataKeys)
         trialDataDict['points'] = 0
@@ -920,16 +917,20 @@ if __name__ == '__main__':
         lt.ClearDataBuffer()
         lt.SetResultsTypeCalibrated()
         lt.StartTracking()
+
+	# initialize lists of trial, blocks parameters
         blockTrialNumbs = randIntListSetTotal(12, 16, 10, 22, 3)
         contingentBlockList = makeContingentBlockList(blockTrialNumbs)
         probabilityConditionList = makeProbabilityConditionList(
             blockTrialNumbs)
         stimSequence = randIntNoRepeat(sum(blockTrialNumbs), 0, 3)
-        if doSave == True:
+
+	# initialize thread for saving trial / eyetracker data
+        if doSave == True:	
             saveTrialThread = Thread(target=saveTrialData)
             saveTrialThread.start()
-        totalTimer = core.Clock()
-        timer = core.Clock()
+
+	# start of actual eperimental trials
         for blockNumb in range(len(blockTrialNumbs)):
             if blockNumb == len(blockTrialNumbs) / 2:
                 breakSection()
@@ -940,16 +941,9 @@ if __name__ == '__main__':
                     trialDataDict['block'] = blockNumb
                     trialDataDict['contingentCond'] = contingentBlockList[blockNumb]
                     trialDataDict['probCond'] = probabilityConditionList[blockNumb]
-                    timer.reset()
                     win0.mouseVisible = False
-                    print(
-                        f"trial#: {trialDataDict['trialTotal']}\tprob: {trialDataDict['probCond']}\tcont: {trialDataDict['contingentCond']}")
                     percentFixationScreen()
-                    print(f"{timer.getTime()}\tpoints")
-                    timer.reset()
                     stimulusScreen()
-                    print(f"{timer.getTime()}\tstim")
-                    timer.reset()
                     win0.mouseVisible = True
                     responseScreen()
                     win0.mouseVisible = False
@@ -958,19 +952,13 @@ if __name__ == '__main__':
                         trialDataDictCopy = deepcopy(trialDataDict)
                         trialCheck = True
                         break
-                    print(f"{timer.getTime()}\tresp")
-                    timer.reset()
                     fixationScreen(duration=0.985)
-                    print(f"{timer.getTime()}\tfix")
-                    timer.reset()
                     feedbackScreen()
                     trialDataDictCopy = deepcopy(trialDataDict)
                     trialCheck = True
-                    print(f"{timer.getTime()}\tfeed")
                     break
 
-        totalTime = totalTimer.getTime()
-        print(f"total time elapsed:\t{totalTime}")
+	# end of experiment texts
         if trialDataDict['points'] != 0:
             pointsPercent = round(
                 ((trialDataDict['points'] / ((trialDataDict['trialTotal'] + 1) * 10)) * 100) + 0.5)
@@ -981,6 +969,8 @@ if __name__ == '__main__':
             win0.flip()
             sleep(3)
             backupCheck = False
+
+	    # stopping saving thread
             if doSave == True:
                 saveTrialThread.join()
 
