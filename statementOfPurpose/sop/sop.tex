@@ -1,0 +1,34 @@
+\documentclass[12pt]{article}
+\setlength{\oddsidemargin}{0in}
+\setlength{\evensidemargin}{0in}
+\setlength{\textwidth}{6.5in}
+\setlength{\topmargin}{-1in}
+\setlength{\textheight}{9.7in}
+\setlength{\parskip}{0.5\baselineskip}
+\pagestyle{empty}
+
+\usepackage{hyperref}
+\usepackage{mathptmx}
+
+\let\oldcenter\center
+\let\oldendcenter\endcenter
+\renewenvironment{center}{\setlength\topsep{-1pt}\oldcenter}{\oldendcenter}
+
+\begin{document}
+
+\begin{center}
+{\Large Statement of Purpose} \\
+{\normalsize Sungjoon Park (\href{mailto:s99park@uwaterloo.ca}{s99park@uwaterloo.ca})}
+\end{center}
+
+I want to pursue a Ph.D to contribute to our understanding of the human mind and how it processes information. Through my undergraduate research, I have come to appreciate the importance of mental models and how it relates to the decision making processes and the power of computational techniques in many aspects of research ranging from coding experiments to conducting statistical analysis. During my graduate training, I hope to continue my research in how people process information and how it informs their decision making process while becoming more proficient in computational tools that involve Bayesian and machine learning elements.
+
+Currently, I am working on my undergraduate thesis under the supervision of Dr. Britt Anderson. My project explores the relationships between changes in expectations (or beliefs), confidence and pupil diameter. My participants were tasked to decide whether the shape or the color of the visual stimuli were relevant when making a decision to go `up' or `down'. After making their choice, they were given a stochastic audio feedback where there was a small chance to be wrong regardless of making the correct choice. I manipulated the participants expectations by alternating the relevant factor and I looked at their pupil responses when they made prediction errors. After experiencing a prediction error, participants can suspect something has changed and decide to update their expectations. However, not all prediction errors are informative. In my case, when a prediction error involved both color and shape pointing at the same direction, it was uninformative. Alternatively, when the color and the shape pointed at different directions, it was informative. By differentiating the two types of errors, I attempted to isolate pupil responses to change in expectations and surprise in general. A secondary hypothesis I explored was whether confidence positively correlated with the degree of change in expectations; where prediction errors during high confidence could be more salient and lead to a greater pupil response. This was done by manipulating the stochasticity of the feedback where during certain blocks there was a greater chance for the feedback to be unreliable, leading to decrease in confidence in their choices.
+
+In the process of working on my thesis project, I have demonstrated my ability to work and learn independently. I was able to code my experiment with Python and the Psychopy library with limited assistance. I implemented parallelization into my code where the data storage was performed concurrently on a separate computing thread along side the main experimental protocol. I developed a script which converted the binary data output from my experiment into a data frame CSV file using multiprocessing which could allocate multiple computing process to expedite the conversion. For the choice of the eye-tracker, I took the initiative to work with a new lab hardware (CRS LiveTrack) with basic documentation and no experienced personnel available. I was able to familiarize with its code library and uncovered bugs and found solutions to it. When analyzing the pupil data, I coded my own analysis script in R which included preprocessing steps such as blink detection/extension, data interpolation and noise filtering. In addition, I utilized a high refresh rate monitor which required modification to a computer’s display setting through a command line interface. Throughout the process, I became more familiar with using web searches to find solutions to problems, using the Unix environment, and tools such as version control (git), file transferring/synchronization (rsync), and scheduling (cron). As a proponent for open science, I have my project openly available in a github \href{https://github.com/sjp117/Undergrad_Projects}{repository} and I make the effort to share my project materials such as my proposal draft, ethics application, and recruitment materials with anyone in need.
+
+My research experience started during my third undergraduate year at the University of Waterloo. Before that, I was on a two years leave to fulfill the South Korean military service requirement. During my service, I used it as an opportunity to consider many career options (both academic and non-academic) and conduct research into many fields. I invested time to read on topics ranging from military psychology, history, computer science, philosophy, behavioral economics, biology, neuroscience, and cognitive psychology. Ultimately, I decided to return to my undergraduate study with a galvanized will to continue a career path to become researcher and an academic in the field of cognitive psychology. After my return, I entered Dr. Britt Anderson's lab as a research assistant and enrolled in a directed studies course on statistics, supervised by Dr. Anna Dorfman.
+
+In the lab, I assisted in two graduate student's projects, both involving eye-trackers (SR Eyelink) and probability learning (PL). The first project investigated whether the manipulation of involuntary spatial attention can influence voluntary spatial attention. This was done by biasing participants to a region of a display with a spatial PL task and analyzing their voluntary attention tendency using a visual illusion; the Tse illusion. The second project investigated what eye movements can reveal about mental model updating. It involved participants learning the distribution shape of how stimuli dots appeared on the surface of an invisible circle. We monitored eye behaviors, such as dwell duration (time spent fixated on a stimulus) and saccade latency (time between stimulus onset and saccade initiation), when stimuli appeared in low probability locations and when the stimuli distribution shape was manipulated. Through the directed studies course, I developed my ability to work independently and I became more familiar with R programming through cleaning, mutating, visualizing and analyzing a diary data set. I learned to use packages to conduct quantitative discourse analysis, linear mixed effect modeling, and visualization. Along side my final write up, I created a supplementary document walking through my analysis and visualization process which is openly available in a github \href{https://github.com/sjp117/Undergrad_Projects}{repository}.
+
+\end{document}
