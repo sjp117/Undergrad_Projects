@@ -5,7 +5,7 @@ Feel free to use them as reference.
 ### CV
 This contains my CV draft in tex format.
 
-### Mental Model Updating and Pupil Response
+### Mental Model Updating and Pupil Response (WiP)
 This thesis project explores the relationship between mental model updating (belief change) and pupil response.
 #### Protocol Video
 [![IMAGE ALT TEXT](http://img.youtube.com/vi/ZQOfGTShs-A/0.jpg)](http://www.youtube.com/watch?v=ZQOfGTShs-A "protocolMentalModel")

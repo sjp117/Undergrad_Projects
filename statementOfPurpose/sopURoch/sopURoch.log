@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.14159265-2.6-1.40.18 (TeX Live 2017/Debian) (preloaded format=pdflatex 2019.9.17)  22 NOV 2019 16:10
+This is pdfTeX, Version 3.14159265-2.6-1.40.18 (TeX Live 2017/Debian) (preloaded format=pdflatex 2019.9.17)  24 NOV 2019 15:30
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -273,11 +273,11 @@ Here is how much of TeX's memory you used:
  7943 multiletter control sequences out of 15000+600000
  27213 words of font info for 61 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 28i,8n,21p,1676b,317s stack positions out of 5000i,500n,10000p,200000b,80000s
+ 28i,8n,21p,1657b,317s stack positions out of 5000i,500n,10000p,200000b,80000s
 {/usr/share/texlive/texmf-dist/fonts/enc/dvips/base/8r.enc}</usr/share/texliv
 e/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt10.pfb></usr/share/texlive/texm
 f-dist/fonts/type1/urw/times/utmr8a.pfb>
-Output written on sopURoch.pdf (2 pages, 36705 bytes).
+Output written on sopURoch.pdf (2 pages, 36774 bytes).
 PDF statistics:
  35 PDF objects out of 1000 (max. 8388607)
  28 compressed objects within 1 object stream
