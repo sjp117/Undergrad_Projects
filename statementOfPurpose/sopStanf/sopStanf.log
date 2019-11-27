@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.14159265-2.6-1.40.18 (TeX Live 2017/Debian) (preloaded format=pdflatex 2019.9.17)  26 NOV 2019 18:29
+This is pdfTeX, Version 3.14159265-2.6-1.40.18 (TeX Live 2017/Debian) (preloaded format=pdflatex 2019.9.17)  27 NOV 2019 00:56
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -262,15 +262,15 @@ LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <6> not available
 Missing character: There is no â in font ptmr7t!
 Missing character: There is no € in font ptmr7t!
 Missing character: There is no ™ in font ptmr7t!
-Package atveryend Info: Empty hook `BeforeClearDocument' on input line 38.
+Package atveryend Info: Empty hook `BeforeClearDocument' on input line 42.
  [2]
-Package atveryend Info: Empty hook `AfterLastShipout' on input line 38.
+Package atveryend Info: Empty hook `AfterLastShipout' on input line 42.
  (./sopStanf.aux)
-Package atveryend Info: Executing hook `AtVeryEndDocument' on input line 38.
-Package atveryend Info: Executing hook `AtEndAfterFileList' on input line 38.
+Package atveryend Info: Executing hook `AtVeryEndDocument' on input line 42.
+Package atveryend Info: Executing hook `AtEndAfterFileList' on input line 42.
 Package rerunfilecheck Info: File `sopStanf.out' has not changed.
 (rerunfilecheck)             Checksum: D41D8CD98F00B204E9800998ECF8427E;0.
-Package atveryend Info: Empty hook `AtVeryVeryEnd' on input line 38.
+Package atveryend Info: Empty hook `AtVeryVeryEnd' on input line 42.
  ) 
 Here is how much of TeX's memory you used:
  4383 strings out of 492982
@@ -284,7 +284,7 @@ Here is how much of TeX's memory you used:
 e/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/share/texlive/texm
 f-dist/fonts/type1/public/amsfonts/cm/cmtt10.pfb></usr/share/texlive/texmf-dist
 /fonts/type1/urw/times/utmr8a.pfb>
-Output written on sopStanf.pdf (2 pages, 45116 bytes).
+Output written on sopStanf.pdf (2 pages, 46764 bytes).
 PDF statistics:
  39 PDF objects out of 1000 (max. 8388607)
  31 compressed objects within 1 object stream
