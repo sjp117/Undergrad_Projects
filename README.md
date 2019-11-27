@@ -15,4 +15,4 @@ This thesis project explores the relationship between mental model updating (bel
 - It contains a supplamentery document that guides through my analysis and visualization process.
 
 ### Statement of Purpose
-This contains my SOP (or personal statement) drafts for graduate school applications in tex format.
+This contains my SOP (or personal statement) drafts for graduate school applications in tex format and their pdf output.
