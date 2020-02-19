@@ -1,0 +1,478 @@
+---
+title: 'Data Analysis'
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_float: true
+    theme: united
+---
+
+This is a supplamentary document presenting the codes used for the analysis and visualization seen in the main thesis document.
+<br>
+
+
+## Packages and Data Import
+
+```{r,warning=FALSE,message=FALSE}
+# Packages used
+library(data.table) # data reading and manipulation
+library(dplyr)      # data manipulation and pipe
+library(ggplot2)    # visualization
+library(papaja)     # visualization (apa theme)
+library(car)        # ANOVA output for lm()
+library(lme4)       # linear mixed effects modelling
+library(lmerTest)   # tests for lme4 (ANOVA)
+library(optimx)     # optimizers for lmer
+library(sjstats)    # statistical output (std_beta)
+
+# import data
+# Behavioral and summary pupil data
+dat <- as.data.table(fread("data/allSummDataV3.csv"))
+# Time-series, processed pupil data
+datPupil <- as.data.table(fread("data/eyeMergeData.csv"))
+```
+<br>
+
+## Behavioral Data Analysis
+
+### Session Vs Success Rate 
+```{r,warning=F}
+# Figure 3
+dat %>% 
+  ggplot(aes(x=as.factor(session),y=isCorrect,color=as.factor(partID)))+
+  geom_point(stat = "summary", fun.y="mean")+
+  geom_point(aes(group=1),stat = "summary", fun.y="mean", shape=15)+
+  geom_line(aes(group=partID),stat = "summary", fun.y="mean")+
+  geom_line(aes(group=1),stat = "summary", fun.y="mean")+
+  geom_hline(yintercept = 0.5, linetype='dashed')+
+  geom_hline(yintercept = 0.75, linetype= 'dashed', color='blue')+
+  geom_hline(yintercept = 0.90, linetype= 'dashed', color='red')+
+  scale_y_continuous(breaks = scales::pretty_breaks(n = 5))+
+  scale_color_brewer(palette="Dark2")+
+  theme_apa()+
+  theme(legend.position = "none")+
+  facet_grid(version2~probCond2)+
+  labs(title = "Accuracy Over Sessions",
+     x = "Session",
+     y = "Accuracy")
+# Blue line: 75% mark for low probability condition
+# Red line: 90% mark for high probability condition
+```
+```{r}
+mod1 <- lmer(data=dat[dat$respSuccess==1],
+             isCorrect ~ probCond2*contCondName+version+session+
+               (probCond2+contCondName|partID:session),
+             control = lmerControl(optimizer = 'optimx', optCtrl=list(method='bobyqa')))
+
+# f-statistics output of the model
+anova(mod1)
+
+# beta estimates, standard errors and CI (95%)
+sjstats::std_beta(mod1)
+```
+
+<br>
+
+### Reliability Vs Absolute Confidence Rating
+```{r,warning=F}
+# Figure 4
+dat[dat$respSuccess==1] %>%  
+  ggplot(aes(x=as.factor(probCond2),y=absConfRating,color=as.factor(partID)))+
+  geom_boxplot(aes(group=probCond2))+
+  geom_point(aes(group=partID),stat = "summary", fun.y="mean", size=2)+
+  geom_line(aes(group=partID),stat = "summary", fun.y="mean")+
+  geom_point(aes(group=1),stat = "summary", fun.y="mean", size=3, shape=18)+
+  geom_line(aes(group=1),stat = "summary", fun.y="mean")+
+  scale_color_brewer(palette="Dark2")+
+  theme_apa()+
+  theme(legend.position = "none")+
+  facet_grid(~contCondName)+
+  labs(title = "Reliability Vs Absolute Confidence Rating",
+       x = "Reliability",
+       y = "Absolute Confidence Rating")
+```
+
+```{r,warning=F}
+mod2 <- lmer(data=dat[dat$respSuccess==1],
+             absConfRating~probCond2*
+               contCondName+
+               session+
+               version+
+               (contCondName+probCond2|partID:session),
+             control = lmerControl(optimizer = 'optimx', optCtrl=list(method='bobyqa')))
+
+# f-statistics output of the model
+anova(mod2)
+
+# beta estimates, standard errors and CI (95%)
+sjstats::std_beta(mod2)
+```
+<br>
+
+### Prediction Error Vs Confidence Change
+
+The "confWillChange" variable was derived by subtracting the current *ith* row's confidence rating ("confRatingCorr") by the proceeding *i+1th* row's confidence rating.
+<br>
+$$ConfWillChange_i = (ConfRating_i - ConfRating_{i+1})\times-1$$
+<br>
+It represents the change in confidence that will occur after ith trial. This was derived using the following code:
+
+```{r, warning=F, eval=F}
+dat[,("confWillChange") := ifelse(trialSess != 191,(confRatingCorr - shift(dat$confRatingCorr, type = "lead"))*-1, NA)]
+```
+
+```{r,warning=F}
+# Figure 5
+dat[dat$respSuccess==1] %>% 
+  ggplot(aes(x=as.factor(isError2),y=confWillChange,color=as.factor(partID)))+
+  geom_point(aes(group=partID),stat = "summary", fun.y="mean", size=2)+
+  geom_line(aes(group=partID),stat = "summary", fun.y="mean")+
+  geom_point(aes(group=1),stat = "summary", fun.y="mean", size=3, shape=18)+
+  geom_line(aes(group=1),stat = "summary", fun.y="mean")+
+  geom_hline(yintercept = 0, color='grey', linetype='dashed')+
+  scale_color_brewer(palette="Dark2")+
+  theme_apa()+
+  facet_grid(probCond2~contCondName)+
+  theme(legend.position = "none")+
+  labs(title = "PE VS Confidence Change",
+       x = "Prediction",
+       y = "Mean Confidence Change")
+
+# Figure 6
+dat[dat$respSuccess==1] %>% 
+  ggplot(aes(x=as.factor(contCondName),y=confWillChange,color=as.factor(isError2)))+
+  geom_point(aes(group=isError2),stat = "summary", fun.y="mean", size=2, position = position_dodge(width = 0.2))+
+  geom_line(aes(group=isError2),stat = "summary", fun.y="mean",position = position_dodge(width = 0.2))+
+  scale_color_brewer(palette="Dark2")+
+  geom_hline(yintercept = 0, color='grey', linetype='dashed')+
+  theme(legend.title=element_blank())+
+  theme_apa()+
+  facet_grid(~probCond2)+
+  theme(legend.title=element_blank())+
+  labs(title = "PE VS Confidence Change Simplified",
+       x = "Contingent Condition",
+       y = "Mean Confidence Change")+
+  scale_y_continuous(breaks = seq(-15, 15))+
+  theme(legend.position = c(0.6,0.85))
+```
+
+```{r,warning=F}
+mod3<-dat[dat$respSuccess==1] %>% 
+  dplyr::group_by(partID,version,session,probCond2,contCondName, isError2) %>%
+  summarise(confWillChange = mean(confWillChange, na.rm=T)) %>% 
+  lm(data=. ,
+     confWillChange~factor(isError2)*
+       factor(probCond2)*
+       factor(contCondName)+
+       session+
+       factor(version))
+
+# f-statistics output of the model
+car::Anova(mod3, type=3)
+
+# beta estimates, standard errors and CI (95%)
+sjstats::std_beta(mod3)
+```
+<br>
+
+### Surprise Type Vs Confidence Change
+```{r,warning=F}
+# Figure 7
+dat[dat$respSuccess==1] %>% 
+  ggplot(aes(x=factor(surpriseType2,
+                      levels = c('Correct Prediction', 'IT', 'Bayes')),
+             y=confWillChange,color=as.factor(partID)))+
+  geom_point(aes(group=partID),stat = "summary", fun.y="mean", size=2)+
+  geom_line(aes(group=partID),stat = "summary", fun.y="mean")+
+  geom_point(aes(group=1),stat = "summary", fun.y="mean", size=3, shape=18)+
+  geom_line(aes(group=1),stat = "summary", fun.y="mean")+
+  geom_hline(yintercept = 0, color='grey', linetype='dashed')+
+  scale_color_brewer(palette="Dark2")+
+  theme_apa()+
+  facet_grid(contCondName~probCond2)+
+  theme(legend.position = "none")+
+  labs(title = "Surprise Type VS Confidence Change",
+       x = "Surprise Type",
+       y = "Mean Confidence Change")+
+  scale_y_continuous(breaks = scales::pretty_breaks(n = 10))
+
+# Figure 8
+dat[dat$respSuccess==1] %>% 
+  ggplot(aes(x=as.factor(contCondName),y=confWillChange,color=as.factor(surpriseType2)))+
+  geom_point(aes(group=surpriseType2),stat = "summary", fun.y="mean", size=2)+
+  geom_line(aes(group=surpriseType2),stat = "summary", fun.y="mean")+
+  geom_hline(yintercept = 0, color='grey', linetype='dashed')+
+  scale_color_brewer(palette="Dark2")+
+  theme_apa()+
+  facet_grid(~probCond2)+
+  theme(legend.title=element_blank())+
+  labs(title = "Surprise Type VS Confidence Change Simplified",
+       x = "Contingent Condition",
+       y = "Mean Confidence Change")+
+  scale_y_continuous(breaks = scales::pretty_breaks(n = 10))+
+  theme(legend.position = c(0.6,0.85))
+```
+
+```{r,warning=F}
+mod4<-dat[dat$respSuccess==1] %>% 
+  dplyr::group_by(partID,version,session,probCond2,contCondName,surpriseType2) %>%
+  summarise(confWillChange = mean(confWillChange, na.rm=T)) %>% 
+  lm(data=. ,
+     confWillChange~factor(surpriseType2)*
+       factor(probCond2)*
+       factor(contCondName)+
+       session+
+       factor(version))
+
+# f-statistics output of the model
+car::Anova(mod4, type=3)
+
+# beta estimates, standard errors and CI (95%)
+sjstats::std_beta(mod4)
+```
+<br>
+
+### Reaction Time Vs Sessions
+```{r,warning=F}
+# Figure 9
+dat[dat$respSuccess==1] %>% 
+  mutate(session = session+1) %>% 
+  ggplot(aes(x=as.factor(session),y=firstRT,color=as.factor(partID)))+
+  geom_boxplot(aes(group=session))+
+  geom_point(aes(group=partID),stat = "summary", fun.y="mean", size=2)+
+  geom_line(aes(group=partID),stat = "summary", fun.y="mean")+
+  geom_point(aes(group=1),stat = "summary", fun.y="mean", size=3, shape=18)+
+  geom_line(aes(group=1),stat = "summary", fun.y="mean")+
+  scale_color_brewer(palette="Dark2")+
+  theme_apa()+
+  facet_grid(contCondName~probCond2)+
+  theme(legend.position = "none")+
+  labs(title = "Reaction Time Across Sessions",
+       x = "Session",
+       y = "Reaction Time (s)")+
+  scale_y_continuous(breaks = scales::pretty_breaks(n = 10))
+```
+
+```{r,warning=F}
+mod5 <- lmer(data=dat[dat$respSuccess==1],
+             firstRT ~ probCond2*
+               contCondName+
+               session+
+               version+
+               (probCond2|partID:session))
+
+# f-statistics output of the model
+anova(mod5)
+
+# beta estimates, standard errors and CI (95%)
+sjstats::std_beta(mod5)
+```
+<br>
+
+## Pupil Data Analysis
+
+When analyzing pupil data, we had to derive summary data for each trial from the time-series pupil data. This involved extracting the maximum pupil diameter and its time stamp from each trial's feedback section, and extracting the baseline pupil diameter from each trial's fixation section before the feedback onset.
+<br>
+Next, we computed whether a trial was blinkSafe where no more than 50% of both the fixation section and feedback section was occupied by blinks.
+<br>
+This was accomplished using the following codes:
+```{r, warning=F, eval=F}
+# example data table without key data.
+dat2 <- dat %>% dplyr::select(-c(peakPupil, peakTime, isBlinkSafe, baseline))
+
+# Find peak puil and its timestamp
+tempDat1 <- datPupil[datPupil$section==4][,. (peakPupil = max(pupilAvg), peakTime = secTimestamp[pupilAvg==max(pupilAvg)]), by=.(partID,trialTotal)]
+
+# compute blink safety
+tempDat2<-eyeDat[eyeDat$section>=3][,. (isBlinkSafe = ifelse(mean(isBlink[section == 3]) >= 0.5 | mean(isBlink[section==4]) > 0.5,F,T)), by=.(partID,trialTotal)]
+
+# compute baseline
+tempDat3<-eyeDat[eyeDat$section==3][,. (baseline = mean(pupilAvg[secTimestamp>=(max(secTimestamp)-100)])), by=.(partID,trialTotal)]
+
+  # merge with the summary data
+dat2 <- merge(dat2,tempDat1, by=c("partID","trialTotal"),all.x=T)
+dat2 <- merge(dat2,tempDat2, by=c("partID","trialTotal"),all.x=T)
+dat2 <- merge(dat2,tempDat3, by=c("partID","trialTotal"),all.x=T)
+```
+
+With the pupil data extracted from the pupil data table, we can compute data such as the baseline corrected peak pupil diameter and exclude trials where there were too many blinks.
+<br>
+
+### Prediction Vs Peak Pupil Dilation Size
+```{r,warning=F}
+# Figure 10
+dat[dat$isBlinkSafe==T] %>% 
+  ggplot(aes(x=as.factor(isError2),y=baseCorPeakPupil,color=as.factor(partID)))+
+  geom_boxplot(aes(group=isError2))+
+  geom_point(stat = "summary", fun.y="mean")+
+  geom_point(aes(group=isError2),stat = "summary", fun.y="mean")+
+  geom_line(aes(group=1),stat = "summary", fun.y="mean")+
+  geom_line(aes(group=partID),stat = "summary", fun.y="mean")+
+  theme_apa()+
+  scale_color_brewer(palette="Dark2")+
+  theme(legend.position = "none")+
+  scale_y_continuous(breaks = scales::pretty_breaks(n = 10))+
+  labs(title = "Prediction Vs Peac Pupil Dilation",
+       x = "Prediction",
+       y = "Peak Pupil Dilation (mm)")
+```
+
+```{r,warning=F}
+mod6<- lmer(data=dat[dat$isBlinkSafe==T],
+              baseCorPeakPupil~isError2*
+              probCond2*
+              contCondName+
+              baseline+
+              peakTimeSec+
+              session+
+              version+
+              (isError2+probCond+contCondName+baseline|partID:session),
+            control = lmerControl(optimizer = 'optimx', optCtrl=list(method='bobyqa')))
+
+# f-statistics output of the model
+anova(mod6)
+
+# beta estimates, standard errors and CI (95%)
+sjstats::std_beta(mod6)
+```
+<br>
+
+### Prediction Vs Peak Pupil Dilation Latency
+```{r,warning=F}
+# Figure 11
+dat[dat$isBlinkSafe==T] %>% 
+  ggplot(aes(x=as.factor(isError2),y=peakTimeSec,color=as.factor(partID)))+
+  geom_boxplot(aes(group=isError2))+
+  geom_point(stat = "summary", fun.y="mean")+
+  geom_point(aes(group=isError2),stat = "summary", fun.y="mean")+
+  geom_line(aes(group=1),stat = "summary", fun.y="mean")+
+  geom_line(aes(group=partID),stat = "summary", fun.y="mean")+
+  theme_apa()+
+  scale_color_brewer(palette="Dark2")+
+  theme(legend.position = "none")+
+  scale_y_continuous(breaks = scales::pretty_breaks(n = 10))+
+  labs(title = "Prediction Vs Peak Pupil Dilation Latency",
+       x = "Prediction",
+       y = "Peak Pupil Dilation Latency (s)")
+```
+
+```{r,warning=F}
+mod7 <- lmer(data=dat[dat$isBlinkSafe==T],
+             peakTimeSec~isError2*
+               probCond2*
+               contCondName+
+               baseCorPeakPupil+
+               baseline+
+               session+
+               version+
+               (isError2+baseline+baseCorPeakPupil|partID:session),
+             control = lmerControl(optimizer = 'optimx', optCtrl=list(method='bobyqa')))
+
+# f-statistics output of the model
+anova(mod7)
+
+# beta estimates, standard errors and CI (95%)
+sjstats::std_beta(mod7)
+```
+<br>
+
+### Surprise Type Vs Peak Pupil Dilation Size
+```{r,warning=F}
+# Figure 12
+dat[dat$isBlinkSafe==T] %>% 
+  ggplot(aes(x=reorder(as.factor(surpriseType2),+baseCorPeakPupil),
+             y=baseCorPeakPupil,color=as.factor(partID)))+
+  geom_boxplot(aes(group=surpriseType2), outlier.size = -1)+
+  geom_point(stat = "summary", fun.y="mean")+
+  geom_point(aes(group=surpriseType),stat = "summary", fun.y="mean")+
+  geom_line(aes(group=1),stat = "summary", fun.y="mean")+
+  geom_line(aes(group=partID),stat = "summary", fun.y="mean")+
+  theme_apa()+
+  scale_color_brewer(palette="Dark2")+
+  theme(legend.position = "none")+
+  scale_y_continuous(breaks = scales::pretty_breaks(n = 10))+
+  labs(title = "Surprise Type Vs Peak Pupil Dilation",
+       x = "Surprise Type",
+       y = "Peak Pupil Dilation (mm)")+
+  facet_grid(probCond2~.)+
+  coord_cartesian(ylim = c(-0.2, 0.9))
+```
+
+```{r,warning=F}
+mod8 <- lmer(data=dat[dat$isBlinkSafe==T],
+             baseCorPeakPupil~factor(surpriseType)*
+               probCond2*
+               contCondName+
+               baseline+
+               peakTimeSec+
+               session+
+               version+
+               (probCond2+contCondName+baseline+peakTimeSec|partID:session),
+             control = lmerControl(optimizer = 'optimx', optCtrl=list(method='bobyqa')))
+
+# f-statistics output of the model
+anova(mod8)
+
+# beta estimates, standard errors and CI (95%)
+sjstats::std_beta(mod8)
+```
+<br>
+
+### Surprise Type Vs Peak Pupil Dilation Latency
+```{r,warning=F}
+# Figure 13
+dat[dat$isBlinkSafe==T] %>% 
+  ggplot(aes(x=factor(surpriseType2, levels = c('Correct Prediction', 'IT', 'Bayes')),
+             y=peakTimeSec,color=as.factor(partID)))+
+  geom_boxplot(aes(group=surpriseType2))+
+  geom_point(stat = "summary", fun.y="mean")+
+  geom_point(aes(group=surpriseType),stat = "summary", fun.y="mean")+
+  geom_line(aes(group=1),stat = "summary", fun.y="mean")+
+  geom_line(aes(group=partID),stat = "summary", fun.y="mean")+
+  theme_apa()+
+  scale_color_brewer(palette="Dark2")+
+  theme(legend.position = "none")+
+  scale_y_continuous(breaks = scales::pretty_breaks(n = 10))+
+  labs(title = "Surprise Type Vs Peak Pupil Dilation Latency",
+       x = "Surprise Type",
+       y = "Peak Pupil Dilation Latency (s)")
+```
+
+```{r,warning=F}
+mod9 <- lmer(data=dat[dat$isBlinkSafe==T],
+             peakTimeSec~factor(surpriseType)*
+               probCond2*
+               contCondName+
+               baseline+
+               baseCorPeakPupil+
+               session+
+               version+
+               (contCondName+baseline+baseCorPeakPupil|partID:session),
+             control = lmerControl(optimizer = 'optimx', optCtrl=list(method='bobyqa')))
+
+# f-statistics output of the model
+anova(mod9)
+
+# beta estimates, standard errors and CI (95%)
+sjstats::std_beta(mod9)
+```
+<br>
+
+### Time-series Pupil Diameter
+```{r,warning=F}
+# Figure 14
+datPupil %>% 
+  mutate(secTimestamp = secTimestamp/1000) %>% 
+  dplyr::filter(section >= 4) %>% 
+  ggplot(aes(x = secTimestamp,
+             y = baseCorPupil,
+             color = factor(surpriseType2, levels = c('Bayes', 'IT', 'Correct'))))+
+  geom_smooth(se=F)+
+  theme_apa()+
+  theme(legend.position = c(0.85,0.67))+
+  theme(legend.title=element_blank())+
+  labs(x = "Time (s)",
+       y = "Baseline Corrected Pupil Diameter (mm)")
+```
+

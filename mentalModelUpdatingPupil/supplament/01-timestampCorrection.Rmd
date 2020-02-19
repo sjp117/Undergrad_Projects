@@ -1,0 +1,108 @@
+---
+title: 'Timestamp Correction'
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_float: true
+    theme: united
+---
+
+This is a supplamentary document presenting how the timestamps were corrected for both the pupil and bahavioral data files.
+<br>
+
+An inconvenient feature of the CRS LiveTrack Lightening eye tracker is that it resets its timestamp when the tracker stops recording. Thus, if the tracker had to stop recording for recalibrated or any other reason, the timestamp is reset.
+<br>
+
+To correct for this, I added the last timestamp before a reset to the first timestamp after a reset.
+<br>
+
+## Preperation
+```{r, warning=F, message=F}
+# import packages
+library(data.table)
+library(dplyr)
+library(ggplot2)
+```
+
+```{r, warning=F}
+# First, import the raw pupil data
+dat <- data.table::fread("data/eyeDataRaw/000_0Eye.csv")
+# Next, run the following functions to find the row at which the timestamp resets.
+which(dat$Timestamp == 2000, arr.ind=TRUE)
+which(dat$Timestamp == 1875, arr.ind=TRUE)
+```
+
+These are the two smallest timestamp values (2000 and 1875) from my raw pupil data. Depending on how many resets are present in the data, the function will return more row values.
+<br><br>
+
+## Visualization of Reset
+```{r, warning=F}
+# Visualization of the timestamp reset
+dat[, index := .I] %>% 
+  ggplot(aes(x=index,y=Timestamp))+
+  geom_point(size=0.1)+
+  geom_vline(xintercept = 561819, linetype='dashed')
+```
+
+```{r, warning=F}
+# Once we know which row the timestamp resets at, we add the previous sample's time stamp to all the following rows or up to the row where the next reset happens.
+dat2 <- dat
+dat2$Timestamp[561819:nrow(dat)] <- dat2$Timestamp[561819:nrow(dat)]+
+  dat2$Timestamp[561818]
+```
+Depending on how many resets are present, the above script can be modified to make more fine tuned corrections.
+<br>
+
+## Visualization of Correction
+```{r, warning=F}
+# Visualization of the corrected timestamp
+dat2[, index := .I] %>% 
+  ggplot(aes(x=index,y=Timestamp))+
+  geom_point(size=0.1)+
+  geom_vline(xintercept = 561819, linetype='dashed')
+```
+<br>
+Once the correction is complete, the corrected data file can be exported.
+<br>
+
+## Example of Multiple Resets
+```{r, warning=F}
+# First, import the raw pupil data
+dat3 <- data.table::fread("data/eyeDataRaw/002_0Eye.csv")
+# Next, run the following functions to find the row at which the timestamp resets.
+which(dat3$Timestamp == 2000, arr.ind=TRUE)
+which(dat3$Timestamp == 1875, arr.ind=TRUE)
+```
+
+```{r, warning=F}
+# Visualization of multiple timestamp reset
+dat3[, index := .I] %>% 
+  ggplot(aes(x=index,y=Timestamp))+
+  geom_point(size=0.1)+
+  geom_vline(xintercept = 19507, linetype='dashed')+
+  geom_vline(xintercept = 627782, linetype='dashed')
+```
+```{r, warning=F}
+dat4 <- dat3
+dat4$Timestamp[19507:627781] <- dat4$Timestamp[19507:627781]+
+  dat4$Timestamp[19506]
+
+dat4$Timestamp[627782:nrow(dat4)] <- dat4$Timestamp[627782:nrow(dat4)]+
+  dat4$Timestamp[627781]
+```
+
+```{r, warning=F}
+# Visualization of multiple timestamp correction
+dat4[, index := .I] %>% 
+  ggplot(aes(x=index,y=Timestamp))+
+  geom_point(size=0.1)+
+  geom_vline(xintercept = 19507, linetype='dashed')+
+  geom_vline(xintercept = 627782, linetype='dashed')
+```
+<br>
+
+## Correction for Summary Data
+I unfortunately cound not devise a simple method of correcting the timestamps for the raw summary data.
+<br>
+I resorted to using a spreadsheet software (LibreOffice Calc) where I manually corrected the timestamps.

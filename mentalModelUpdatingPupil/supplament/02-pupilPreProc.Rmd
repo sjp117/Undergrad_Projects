@@ -1,0 +1,556 @@
+---
+title: 'Pupil Preprocessing'
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_float: true
+    theme: united
+---
+
+This is a supplamentary document presenting how the raw pupil data was preprocessed. This involves prerairing the pupil data, identifying blinks, etending blinks, removing the blink pupil diameter samples, linear interpolation of the removed samples, and low-pass filtering of the whole timeseries data.
+<br>
+
+![From Winn et al., 2018](figures/preProc.png)
+
+## Packages
+
+```{r,warning=FALSE,message=FALSE}
+# Packages used
+library(data.table) # data reading and manipulation
+library(dplyr)      # data manipulation and pipe
+library(ggplot2)    # visualization
+library(signal)     # low-pass filtering
+library(zoo)        # linear interpolation
+library(imputeTS)   # linear interpolation
+```
+
+## Helper Functions
+Functions used to downsample the data, extend blinks and merge pupil data files
+```{r,warning=F}
+downSampleHalf <- function(inData, repeatNumb) {
+  # function that removes every second row for a given number of repetition
+  # takes in a data table and an integer of the number or halving
+  for (i in 1:repeatNumb){
+    toDelete <- seq(1, nrow(inData), 2) # by half
+    inData <- inData[ toDelete ,]
+  }
+  return(inData)
+}
+
+extendBlinks <- function(data,dur) {
+  # function for extending blinks before and after blink
+  # this is to account for distortion caused by blinking
+  # takes in a data table with a column named "isBlink" and
+  # an integer for the number of samples to extend the blink
+  tempDat <- data
+  maxRow <- nrow(data)
+  for (i in as.array(which(data$isBlink == 1))) {
+    # 50 accounts for the number of rows within 100ms at a 500Hz sampleing rate
+    if ((i - dur) > 0) {
+      if (data$isBlink[i-1] == 0) {
+        tempDat$isBlink[(i-dur):i] <- 1
+      }
+    }
+    if ((i + dur) <= maxRow) {
+      if (data$isBlink[i+1] == 0) {
+        tempDat$isBlink[i:(i+dur)] <- 1
+      }
+    }
+    if ((i + dur) > maxRow){
+      tempDat$isBlink[i:maxRow] <- 1
+    }
+  }
+  return(tempDat)
+}
+
+mergeEye <- function(){
+  # function for mergeing the pupil data .csv files
+  for (part in 0:7){
+    for (sess in 0:2){
+      i <- as.character(part)
+      j <- as.character(sess)
+      eyeFileName = paste('data/eyeDataProcessed/00',i,"_",j,"EyeV3.csv",sep="")
+      if (file.exists(eyeFileName) == T) {
+        print(eyeFileName)
+        tempDF <- fread(eyeFileName)
+        if (part == 0 & sess == 0) {
+          mainDF <- tempDF
+        } else {
+          mainDF <- rbind(mainDF, tempDF)
+        }
+      }
+    }
+  }
+  return(mainDF)
+}
+```
+
+## Overview
+
++ Loop over participants
+  + Loop over sessions
+    + Import Pupil Data (participant:session)
+    + Import Behavioral Data (participant:session)
+    + Keep only needed columns from pupil data
+    + Compute the pupil diameter (average of left and right pupil)
+    + Label blink and non-tracked samples
+    + Remove un-needed columns
+    + Extend blinks (100ms)
+    + Set pupil diameter to NA for blink samples
+    + Linear interpolation
+    + Low-pass filtering
+    + Lebeling trials, blocks and sessions on pupil data
+    + Remove samples with no labels
+    + Add other useful labels (error/surprise/contingent/reliability condition)
+    + Down-sample to 62.5Hz
+    + Zeroing timestamps
+      + Session
+      + Trial
+      + Section
+  + Export Data
++ Merge all pupil data files
+
+
+## Complete Code
+
+```{r,warning=F, message=F,eval=F,echo=T}
+# setting parameters for a low-pass 4th order butterfill filter at 4Hz
+bfLow <- signal::butter(4, 0.04, type="low")
+
+# loop over participants
+for (part in 0:7){
+  # loop over sessions
+  for (sess in 0:2){
+    
+    
+    i <- as.character(part)
+    j <- as.character(sess)
+    eyeFileName = paste('data/eyeDataRawFixed/00',i,"_",j,"EyeDataV2.csv",sep="")
+    summFileName = paste('data/summDataFixed/00',i,"_",j,"SummDataV2.csv",sep="")
+    if (file.exists(eyeFileName) == T & file.exists(summFileName) == T){
+      print(paste(i,j,sep = '_'))
+      
+      
+      # import datas
+      eyeDat <- data.table::fread(eyeFileName)
+      summDat <- data.table::fread(summFileName)
+      
+      
+      # label partID and session numb
+      eyeDat$partID <- part
+      eyeDat$session <- sess
+      
+      
+      # keep needed columns
+      eyeDat <- eyeDat %>% 
+        dplyr::select(c(partID, session, Timestamp, PupilMajorAxis, PupilMajorAxisRight,
+                        Tracked, TrackedRight, GazeX, GazeY, GazeXRight, GazeYRight))
+      
+      
+      # compute average pupil size
+      eyeDat$pupilAvg <- (eyeDat$PupilMajorAxis + eyeDat$PupilMajorAxisRight) / 2
+      
+      
+      # label blinks and non-tracks
+      eyeDat$isBlink[eyeDat$Tracked == 0 | eyeDat$TrackedRight == 0] <- 1
+      eyeDat$isBlink[is.na(eyeDat$isBlink)] <- 0
+      
+      
+      # remove un-needed columns
+      eyeDat <- eyeDat %>% 
+        dplyr::select(-c(Tracked, TrackedRight, PupilMajorAxis, PupilMajorAxisRight))
+      
+      
+      # extend blinks
+      eyeDat <- extendBlinks(eyeDat, 50)
+      
+      
+      # set pupil diameter to NA on blinks
+      eyeDat$pupilAvg[eyeDat$isBlink == T] <- NA
+      
+      
+      # linear interpolation of NA pupil dilations
+      eyeDat$pupilAvg <- imputeTS::na_interpolation(eyeDat$pupilAvg, "linear")
+      eyeDat$pupilAvg <- zoo::na.fill(eyeDat$pupilAvg, "extend")
+        # zoo::na.fill function extends the interpolation to the ends of the data
+      
+      
+      # apply low-pass filter
+      eyeDat$pupilAvg <- signal::filter(bfLow, eyeDat$pupilAvg)
+      
+      
+      # loop for labeling trials, blocks and sections
+      for (row in 1:nrow(summDat)){
+        #label trial numb
+        if (row == nrow(summDat)){
+          eyeDat$trialTotal[eyeDat$Timestamp >= summDat$pointsStartTime[row] &
+                              eyeDat$Timestamp <= summDat$feedbackEndTime[row]] <-
+            summDat$trialTotal[row]
+        } else{
+          eyeDat$trialTotal[eyeDat$Timestamp >= summDat$pointsStartTime[row] &
+                              eyeDat$Timestamp < summDat$pointsStartTime[row + 1]] <-
+            summDat$trialTotal[row]
+        }
+        
+        
+        # label sections
+        eyeDat$section[eyeDat$Timestamp >= summDat$pointsStartTime[row] &
+                         eyeDat$Timestamp <= summDat$stimStartTime[row]] <- 0
+        eyeDat$section[eyeDat$Timestamp >= summDat$stimStartTime[row] &
+                         eyeDat$Timestamp <= summDat$respStartTime[row]] <- 1
+        eyeDat$section[eyeDat$Timestamp >= summDat$respStartTime[row] &
+                         eyeDat$Timestamp <= summDat$fixStartTime[row]] <- 2
+        eyeDat$section[eyeDat$Timestamp >= summDat$fixStartTime[row] &
+                         eyeDat$Timestamp <= summDat$feedbackStartTime[row]] <- 3
+        eyeDat$section[eyeDat$Timestamp >= summDat$feedbackStartTime[row] &
+                         eyeDat$Timestamp <= summDat$feedbackEndTime[row]] <- 4
+      }
+      
+      
+      # remove non sections
+      eyeDat <- eyeDat %>% 
+        dplyr::filter(!is.na(section))
+      
+      
+      # label blocks
+      for (t in 0:191){
+        eyeDat$blockNumb[eyeDat$trialTotal == t] <-
+          summDat$block[summDat$trialTotal == t]
+      }
+      
+      
+      # loop for making useful labels
+      for (trial in 0:191){
+        
+        # label prediction error state
+        eyeDat$isCorrect[eyeDat$trialTotal == trial] <-
+          summDat$isCorrect[summDat$trialTotal == trial]
+        
+        # label surprise type
+        eyeDat$surpriseType[eyeDat$trialTotal == trial] <-
+          summDat$surpriseType[summDat$trialTotal == trial]
+        
+        # label contingent condition
+        eyeDat$contingentCond[eyeDat$trialTotal == trial] <-
+          summDat$contingentCond[summDat$trialTotal == trial]
+        
+        # label reliability condition
+        eyeDat$probCond[eyeDat$trialTotal == trial] <-
+          summDat$probCond[summDat$trialTotal == trial]
+      }
+      
+      
+      # downsample to 62.5Hz
+      eyeDat <- downSampleHalf(eyeDat,3)
+      
+      
+      # zeroing timestamps
+      # for whole session
+      eyeDat$Timestamp <- eyeDat$Timestamp - eyeDat$Timestamp[1]
+      
+      # for each trial
+      for (t in 0:191){
+        eyeDat$trialTimestamp[eyeDat$trialTotal == t] <-
+          eyeDat$Timestamp[eyeDat$trialTotal == t] - eyeDat$Timestamp[eyeDat$trialTotal == t][1]
+        
+        # for each section
+        for (sec in 0:4){
+          eyeDat$secTimestamp[eyeDat$trialTotal == t & eyeDat$section == sec] <-
+            eyeDat$Timestamp[eyeDat$trialTotal == t & eyeDat$section == sec] -
+            eyeDat$Timestamp[eyeDat$trialTotal == t & eyeDat$section == sec][1]
+        }
+      }
+      
+      
+      # output the finished pupil data as csv
+      outFileName = paste('data/eyeDataProcessed/00',i,"_",j,"EyeV3.csv",sep="")
+      data.table::fwrite(eyeDat, outFileName)
+    }
+  }
+}
+
+# Once all pupil data has been preprocessed, we merge them into one.
+mergedPupilData <- mergeEye()
+
+# This merged data can than be exported as its own csv file
+data.table::fwrite(mergedPupilData, "data/eyeMergeData.csv")
+```
+
+## Demonstration
+
+The above code is the omnibus of all the steps taken during the preprocessing stage and it does not illustrate each stage of the pupil preposessing alone.
+<br>
+The following codes and figures isolates each preporcessing steps.
+<br><br>
+
+### Raw Data {.tabset .tabset-fade}
+
+First we illustrate how the raw data looks like:
+
+```{r,warning=F}
+# import data with labels and timestamps but no pupil preprocessing
+dat1 <- data.table::fread("data/000_0EyePreProcDemo.csv")
+# convert timestamp to seconds
+dat1$ts <- dat1$trialTimestamp/1000000
+
+# plot line graph of part of trial #100
+p1 <- dat1[dat1$trialTotal==100] %>% 
+  ggplot(aes(x=ts,y=pupilAvg,color=factor(isBlink)))+
+  geom_line(aes(group=1))+
+  ylim(2,NA)+
+  xlim(4.4,6)+
+  ylab("Mean Pupil Diameter (mm)")+
+  xlab("Timestamp (s)")+
+  ggtitle("Raw")
+
+# zoomed in verison of the above plot
+p1v2 <- dat1[dat1$trialTotal==100] %>% 
+  ggplot(aes(x=ts,y=pupilAvg,color=factor(isBlink)))+
+  geom_line(aes(group=1))+
+  ylim(3.9,NA)+
+  xlim(4.4,6)+
+  ylab("Mean Pupil Diameter (mm)")+
+  xlab("Timestamp (s)")+
+  ggtitle("Raw")
+```
+
+<br>
+We can see a gap around the 5 second and 5.6 second mark where the blink has occured. Samples identified as blinks are colored blue. However, this is not visible in the second zoomed in plot.
+
+#### Zoomed out
+```{r,warning=F,echo=FALSE}
+p1
+```
+
+#### Zoomed in
+```{r,warning=F,echo=FALSE}
+p1v2
+```
+
+### Blink Extension {.tabset .tabset-fade}
+
+Next, we will extend the blinks to occupy 100ms before and after the already identified blink samples.
+
+```{r,warning=F}
+# extend the blinks by 50 samples
+# since our data has a sampling rate of 500Hz, 50 samples translates to 100ms.
+dat2 <- extendBlinks(dat1[dat1$trialTotal==100],50)
+p2 <- dat2 %>% 
+  ggplot(aes(x=ts,y=pupilAvg,color=factor(isBlink)))+
+  geom_line(aes(group=1))+
+  ylim(2,NA)+
+  xlim(4.4,6)+
+  ylab("Mean Pupil Diameter (mm)")+
+  xlab("Timestamp (s)")+
+  ggtitle("Blink Extension")
+
+# zoomed in version of the first plot 
+p2v2 <- dat2 %>% 
+  ggplot(aes(x=ts,y=pupilAvg,color=factor(isBlink)))+
+  geom_line(aes(group=1))+
+  ylim(3.9,NA)+
+  xlim(4.4,6)+
+  ylab("Mean Pupil Diameter (mm)")+
+  xlab("Timestamp (s)")+
+  ggtitle("Blink Extension")
+```
+
+<br>
+We can see that the portion in which samples are considered to be blinks has extended before and after the raw blink lables.
+<br>
+The second plot is a zoomed in version of the first plot.
+
+#### Zoomed out
+```{r,warning=F,echo=FALSE}
+p2
+```
+
+#### Zoomed in
+```{r,warning=F,echo=FALSE}
+p2v2
+```
+
+### Blink Sample Removal {.tabset .tabset-fade}
+
+Next, we set the pupil diameter value to to NA for all samples labeled as blinks.
+
+```{r,warning=F}
+dat3 <- dat2
+dat3$pupilAvg[dat3$isBlink == T] <- NA
+
+p3 <- dat3 %>% 
+  ggplot(aes(x=ts,y=pupilAvg,color=factor(isBlink)))+
+  geom_line(aes(group=1))+
+  ylim(3.9,NA)+
+  xlim(4.4,6)+
+  ylab("Mean Pupil Diameter (mm)")+
+  xlab("Timestamp (s)")+
+  ggtitle("Blink Sample Removal")
+```
+
+<br>
+In the first plot, we have removed all the samples that were labeled as blinks. The change is evident by comparing it with the second plot; before the removal.
+<br>
+We are now ready for linear interpolation.
+
+#### After
+```{r,warning=F,echo=FALSE}
+p3
+```
+
+#### Before
+```{r,warning=F,echo=FALSE}
+p2v2
+```
+
+### Linear Interpolation {.tabset .tabset-fade}
+
+```{r,warning=F}
+# interpolation
+dat3$pupilAvg <- imputeTS::na_interpolation(dat3$pupilAvg, "linear")
+# this step is only necessary to interpolate samples at the ends of the data
+dat3$pupilAvg <- zoo::na.fill(dat3$pupilAvg, "extend")
+
+p4 <- dat3 %>% 
+  ggplot(aes(x=ts,y=pupilAvg,color=factor(isBlink)))+
+  geom_line(aes(group=1))+
+  ylim(3.9,NA)+
+  xlim(4.4,6)+
+  ylab("Mean Pupil Diameter (mm)")+
+  xlab("Timestamp (s)")+
+  ggtitle("Linear Interpolation")
+```
+
+<br>
+We can observe a linear series of blue samples connecting the samples before and after blinks.
+
+#### After
+```{r,warning=F,echo=FALSE}
+p4
+```
+
+#### Before
+```{r,warning=F,echo=FALSE}
+p3
+```
+
+### Low-pass Filter {.tabset .tabset-fade}
+
+With interpolation done, we will now apply a low-pass filter.
+<br>
+In our case, we will apply a fourth order butterfill low-pass filter at 4Hz.
+
+```{r,warning=F}
+dat4 <- dat3
+
+# setting parameters for a fourth order low-pass butterfill filter at 4Hz
+# parameter from left to right: number of order, frequency, type of filter.
+bfLow <- signal::butter(4, 0.04, type="low")
+
+# apply low-pass filter
+dat4$pupilAvg <- signal::filter(bfLow, dat3$pupilAvg)
+
+p5 <- dat4 %>% 
+  ggplot(aes(x=ts,y=pupilAvg,color=factor(isBlink)))+
+  geom_line(aes(group=1))+
+  ylim(3.9,4.3)+
+  xlim(4.4,6)+
+  ylab("Mean Pupil Diameter (mm)")+
+  xlab("Timestamp (s)")+
+  ggtitle("Low-Pass Filter")
+```
+
+<br>
+With the low-pass filtering done, we have not completed the preprocessing of our pupil data. With this, we can now commence analysis of the pupil data.
+
+#### After
+```{r,warning=F,echo=FALSE}
+p5
+```
+
+#### Before
+```{r,warning=F,echo=FALSE}
+p4
+```
+
+### Down Sampling {.tabset .tabset-fade}
+
+In my case, I decided to down sample the data to be about 62.5Hz to make my analysis to be more expedient and since 500Hz is far more samples than what is necessary.
+
+```{r,warning=F}
+# removes every other sample three times over
+dat5 <- downSampleHalf(dat4,3)
+
+# Number of samples per trial before down sampling
+nrow(dat4)
+
+# Number of samples per trial after down sampling
+nrow(dat5)
+
+p6 <- dat5 %>% 
+  ggplot(aes(x=ts,y=pupilAvg,color=factor(isBlink)))+
+  geom_point(aes(group=1), size = 0.5)+
+  ylim(3.9,4.3)+
+  xlim(4.4,6)+
+  ylab("Mean Pupil Diameter (mm)")+
+  xlab("Timestamp (s)")+
+  ggtitle("Down Sampled")
+
+p6v2 <- dat4 %>% 
+  ggplot(aes(x=ts,y=pupilAvg,color=factor(isBlink)))+
+  geom_point(aes(group=1), size = 0.5)+
+  ylim(3.9,4.3)+
+  xlim(4.4,6)+
+  ylab("Mean Pupil Diameter (mm)")+
+  xlab("Timestamp (s)")+
+  ggtitle("Not Down Sampled (samples are too numerous to discern individual points)")
+```
+
+<br>
+The number of samples in my downsampled trial is about 8 times smaller than the original trial data. And it is unlikely for you to differentiate the plots visually (the first plot is from the down sampled data).
+
+#### After
+```{r,warning=F,echo=FALSE}
+p6
+```
+
+#### Before
+```{r,warning=F,echo=FALSE}
+p6v2
+```
+
+### Demonstration Plots Overview {.tabset .tabset-fade}
+
+Here is an overview of all the plots.
+
+#### Raw
+```{r,warning=F,echo=FALSE}
+p1v2
+```
+
+#### Blink Extension
+```{r,warning=F,echo=FALSE}
+p2v2
+```
+
+#### Blink Removal
+```{r,warning=F,echo=FALSE}
+p3
+```
+
+#### Linear Interpolation
+```{r,warning=F,echo=FALSE}
+p4
+```
+
+#### Low-Pass Filter
+```{r,warning=F,echo=FALSE}
+p5
+```
+
+#### Down Sample
+```{r,warning=F,echo=FALSE}
+p6
+```
+  
